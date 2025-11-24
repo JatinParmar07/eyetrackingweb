@@ -227,6 +227,33 @@
             box-shadow: 0 0 15px rgba(255, 30, 30, 0.6);
         }
 
+        .stop-tracking-btn {
+            position: fixed;
+            bottom: 30px;
+            left: 50%;
+            transform: translateX(-50%);
+            padding: 15px 40px;
+            background: #ef4444;
+            color: white;
+            border: none;
+            border-radius: 8px;
+            font-size: 18px;
+            font-weight: bold;
+            cursor: pointer;
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+            z-index: 10000;
+            display: none;
+        }
+
+        #fullscreenDot.active .stop-tracking-btn {
+            display: block;
+        }
+
+        .stop-tracking-btn:active {
+            background: #dc2626;
+            transform: translateX(-50%) scale(0.95);
+        }
+
         @media (max-width: 1200px) {
             .container {
                 grid-template-columns: 1fr;
@@ -300,6 +327,7 @@
     <div id="fullscreenDot">
         <div class="countdown" id="countdown">3</div>
         <div class="moving-dot" id="movingDot"></div>
+        <button class="stop-tracking-btn" id="stopTrackingBtn">⏹ Stop Tracking</button>
     </div>
 
     <script>
@@ -342,6 +370,7 @@
         const fullscreenDot = document.getElementById('fullscreenDot');
         const countdown = document.getElementById('countdown');
         const movingDot = document.getElementById('movingDot');
+        const stopTrackingBtn = document.getElementById('stopTrackingBtn');
 
         // Charts
         let horizontalChart, trajectoryChart, verticalChart, smoothChart;
@@ -687,34 +716,46 @@
         // Start camera
         async function startCamera() {
             try {
-                const stream = await navigator.mediaDevices.getUserMedia({
-                    video: { 
+                const constraints = {
+                    video: {
                         facingMode: 'user',
                         width: { ideal: 1280 },
                         height: { ideal: 720 }
-                    }
-                });
+                    },
+                    audio: false
+                };
 
+                const stream = await navigator.mediaDevices.getUserMedia(constraints);
                 webcamElement.srcObject = stream;
                 
-                webcamElement.onloadedmetadata = () => {
-                    state.videoWidth = webcamElement.videoWidth;
-                    state.videoHeight = webcamElement.videoHeight;
-                    canvasElement.width = state.videoWidth;
-                    canvasElement.height = state.videoHeight;
-                    
-                    camera = new Camera(webcamElement, {
-                        onFrame: async () => {
-                            await faceMesh.send({ image: webcamElement });
-                        },
-                        width: state.videoWidth,
-                        height: state.videoHeight
-                    });
-                    camera.start();
-                    state.cameraActive = true;
-                };
+                await new Promise((resolve) => {
+                    webcamElement.onloadedmetadata = () => {
+                        resolve();
+                    };
+                });
+
+                await webcamElement.play();
+                
+                state.videoWidth = webcamElement.videoWidth;
+                state.videoHeight = webcamElement.videoHeight;
+                canvasElement.width = state.videoWidth;
+                canvasElement.height = state.videoHeight;
+                
+                camera = new Camera(webcamElement, {
+                    onFrame: async () => {
+                        await faceMesh.send({ image: webcamElement });
+                    },
+                    width: state.videoWidth,
+                    height: state.videoHeight
+                });
+                
+                await camera.start();
+                state.cameraActive = true;
+                console.log('Camera started successfully');
+                
             } catch (error) {
-                alert('Camera access denied or not available: ' + error.message);
+                console.error('Camera error:', error);
+                alert('Camera access denied or not available. Please allow camera permissions and reload the page.\n\nError: ' + error.message);
             }
         }
 
@@ -932,18 +973,11 @@
                 URL.revokeObjectURL(url);
             }
 
-            // 3. Save all 4 charts as images
-            await saveChartImage(horizontalChart, `${baseFilename}_horizontal_chart.png`);
-            await saveChartImage(verticalChart, `${baseFilename}_vertical_chart.png`);
-            await saveChartImage(trajectoryChart, `${baseFilename}_trajectory_chart.png`);
-            await saveChartImage(smoothChart, `${baseFilename}_smooth_chart.png`);
-
-            // 4. Create combined analysis image
+            // 3. Save only combined analysis image
             await saveCombinedCharts(baseFilename);
 
             alert('✅ All data saved successfully!\n\n' +
-                  '📊 4 individual chart images\n' +
-                  '🖼️ 1 combined analysis image\n' +
+                  '🖼️ Combined analysis image (4 charts)\n' +
                   '📄 CSV coordinate data\n' +
                   '🎥 Tracking video');
         });
@@ -956,20 +990,6 @@
             a.download = filename;
             a.click();
             URL.revokeObjectURL(url);
-        }
-
-        async function saveChartImage(chart, filename) {
-            return new Promise((resolve) => {
-                chart.canvas.toBlob((blob) => {
-                    const url = URL.createObjectURL(blob);
-                    const a = document.createElement('a');
-                    a.href = url;
-                    a.download = filename;
-                    a.click();
-                    URL.revokeObjectURL(url);
-                    resolve();
-                });
-            });
         }
 
         async function saveCombinedCharts(baseFilename) {
@@ -1003,7 +1023,7 @@
                 const url = URL.createObjectURL(blob);
                 const a = document.createElement('a');
                 a.href = url;
-                a.download = `${baseFilename}_combined_analysis.png`;
+                a.download = `${baseFilename}_analysis.png`;
                 a.click();
                 URL.revokeObjectURL(url);
             });
@@ -1013,6 +1033,11 @@
             if (confirm('Are you sure you want to exit?')) {
                 window.close();
             }
+        });
+
+        // Stop tracking button in fullscreen
+        stopTrackingBtn.addEventListener('click', () => {
+            stopBtn.click();
         });
 
         // Keyboard shortcuts
