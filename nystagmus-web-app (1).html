@@ -1,0 +1,1033 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Nystagmus Eye Tracking System</title>
+    <script src="https://cdn.jsdelivr.net/npm/@mediapipe/face_mesh"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@mediapipe/camera_utils"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: #f0f0f0;
+            padding: 10px;
+        }
+
+        .container {
+            max-width: 1800px;
+            margin: 0 auto;
+            display: grid;
+            grid-template-columns: 1fr 2fr;
+            gap: 10px;
+        }
+
+        .panel {
+            background: white;
+            border-radius: 8px;
+            padding: 15px;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+        }
+
+        .panel-title {
+            font-size: 18px;
+            font-weight: bold;
+            color: #1f2937;
+            margin-bottom: 15px;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        #videoContainer {
+            position: relative;
+            background: black;
+            border-radius: 4px;
+            overflow: hidden;
+            min-height: 480px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        #webcam {
+            width: 100%;
+            height: auto;
+        }
+
+        #canvas {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+        }
+
+        .fps-label {
+            text-align: right;
+            color: #6b7280;
+            font-size: 14px;
+            margin-top: 10px;
+        }
+
+        .control-group {
+            margin: 15px 0;
+            padding: 15px;
+            background: #f9fafb;
+            border-radius: 6px;
+            border: 1px solid #e5e7eb;
+        }
+
+        .control-group-title {
+            font-size: 14px;
+            font-weight: 600;
+            color: #374151;
+            margin-bottom: 10px;
+        }
+
+        .radio-group {
+            display: flex;
+            gap: 15px;
+        }
+
+        .radio-label {
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            cursor: pointer;
+            font-size: 14px;
+        }
+
+        .radio-label input {
+            cursor: pointer;
+        }
+
+        .button-group {
+            display: flex;
+            gap: 10px;
+            margin: 10px 0;
+        }
+
+        button {
+            flex: 1;
+            padding: 12px 16px;
+            border: none;
+            border-radius: 6px;
+            font-size: 14px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+
+        button:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+        }
+
+        .btn-start {
+            background: #3b82f6;
+            color: white;
+        }
+
+        .btn-start:hover:not(:disabled) {
+            background: #2563eb;
+        }
+
+        .btn-stop {
+            background: #ef4444;
+            color: white;
+        }
+
+        .btn-stop:hover:not(:disabled) {
+            background: #dc2626;
+        }
+
+        .btn-reset {
+            background: #f59e0b;
+            color: white;
+        }
+
+        .btn-reset:hover:not(:disabled) {
+            background: #d97706;
+        }
+
+        .btn-save {
+            background: #10b981;
+            color: white;
+        }
+
+        .btn-save:hover:not(:disabled) {
+            background: #059669;
+        }
+
+        .btn-exit {
+            background: #6b7280;
+            color: white;
+        }
+
+        .btn-exit:hover {
+            background: #4b5563;
+        }
+
+        .charts-container {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 15px;
+        }
+
+        .chart-wrapper {
+            background: white;
+            padding: 15px;
+            border-radius: 8px;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+        }
+
+        canvas.chart {
+            max-height: 350px;
+        }
+
+        #fullscreenDot {
+            display: none;
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100vw;
+            height: 100vh;
+            background: white;
+            z-index: 9999;
+        }
+
+        #fullscreenDot.active {
+            display: block;
+        }
+
+        .countdown {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            font-size: 120px;
+            font-weight: bold;
+            color: black;
+        }
+
+        .moving-dot {
+            position: absolute;
+            width: 22px;
+            height: 22px;
+            background: #ff1e1e;
+            border-radius: 50%;
+            border: 3px solid #c80000;
+            box-shadow: 0 0 15px rgba(255, 30, 30, 0.6);
+        }
+
+        @media (max-width: 1200px) {
+            .container {
+                grid-template-columns: 1fr;
+            }
+        }
+
+        @media (max-width: 768px) {
+            .charts-container {
+                grid-template-columns: 1fr;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="panel">
+            <div class="panel-title">🎥 Live Camera Feed</div>
+            
+            <div id="videoContainer">
+                <video id="webcam" autoplay playsinline></video>
+                <canvas id="canvas"></canvas>
+            </div>
+            
+            <div class="fps-label" id="fpsLabel">FPS: --</div>
+            
+            <div class="control-group">
+                <div class="control-group-title">👁 Select Eye</div>
+                <div class="radio-group">
+                    <label class="radio-label">
+                        <input type="radio" name="eye" value="left">
+                        Right Eye
+                    </label>
+                    <label class="radio-label">
+                        <input type="radio" name="eye" value="right">
+                        Left Eye
+                    </label>
+                </div>
+            </div>
+            
+            <div class="button-group">
+                <button id="startBtn" class="btn-start" disabled>▶ Start Tracking</button>
+                <button id="stopBtn" class="btn-stop" disabled>⏹ Stop</button>
+                <button id="resetBtn" class="btn-reset" disabled>🔄 Reset</button>
+            </div>
+            
+            <div class="button-group">
+                <button id="saveBtn" class="btn-save" disabled>💾 Save All Data</button>
+                <button id="exitBtn" class="btn-exit">❌ Exit</button>
+            </div>
+        </div>
+        
+        <div class="panel">
+            <div class="panel-title">📈 Real-time Eye Movement Analysis</div>
+            <div class="charts-container">
+                <div class="chart-wrapper">
+                    <canvas id="horizontalChart" class="chart"></canvas>
+                </div>
+                <div class="chart-wrapper">
+                    <canvas id="trajectoryChart" class="chart"></canvas>
+                </div>
+                <div class="chart-wrapper">
+                    <canvas id="verticalChart" class="chart"></canvas>
+                </div>
+                <div class="chart-wrapper">
+                    <canvas id="smoothChart" class="chart"></canvas>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div id="fullscreenDot">
+        <div class="countdown" id="countdown">3</div>
+        <div class="moving-dot" id="movingDot"></div>
+    </div>
+
+    <script>
+        // Global state
+        const state = {
+            selectedEye: '',
+            patientName: 'Unknown',
+            cameraActive: false,
+            trackingActive: false,
+            timestamps: [],
+            horizontalData: [],
+            verticalData: [],
+            startTime: null,
+            frameCount: 0,
+            lastFpsTime: Date.now(),
+            currentFps: 0,
+            videoWidth: 640,
+            videoHeight: 480,
+            recordedFrames: [],
+            mediaRecorder: null,
+            recordedChunks: []
+        };
+
+        // MediaPipe Face Mesh
+        let faceMesh;
+        let camera;
+        const LEFT_IRIS = [474, 475, 476, 477];
+        const RIGHT_IRIS = [469, 470, 471, 472];
+
+        // DOM elements
+        const webcamElement = document.getElementById('webcam');
+        const canvasElement = document.getElementById('canvas');
+        const canvasCtx = canvasElement.getContext('2d');
+        const fpsLabel = document.getElementById('fpsLabel');
+        const startBtn = document.getElementById('startBtn');
+        const stopBtn = document.getElementById('stopBtn');
+        const resetBtn = document.getElementById('resetBtn');
+        const saveBtn = document.getElementById('saveBtn');
+        const exitBtn = document.getElementById('exitBtn');
+        const fullscreenDot = document.getElementById('fullscreenDot');
+        const countdown = document.getElementById('countdown');
+        const movingDot = document.getElementById('movingDot');
+
+        // Charts
+        let horizontalChart, trajectoryChart, verticalChart, smoothChart;
+
+        // Initialize Charts
+        function initCharts() {
+            // Horizontal chart - time on Y axis (top to bottom)
+            horizontalChart = new Chart(document.getElementById('horizontalChart'), {
+                type: 'line',
+                data: {
+                    datasets: [{
+                        label: 'Horizontal Movement',
+                        data: [],
+                        borderColor: '#2563eb',
+                        backgroundColor: 'rgba(37, 99, 235, 0.1)',
+                        borderWidth: 2,
+                        tension: 0.4,
+                        pointRadius: 0
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: true,
+                    plugins: {
+                        legend: { display: false },
+                        title: { display: true, text: 'Horizontal Movement', font: { size: 14, weight: 'bold' } }
+                    },
+                    scales: {
+                        x: { 
+                            title: { display: true, text: 'Horizontal Position (px)' },
+                            type: 'linear'
+                        },
+                        y: { 
+                            title: { display: true, text: 'Time (s)' },
+                            reverse: true,
+                            type: 'linear'
+                        }
+                    }
+                }
+            });
+
+            // Vertical chart
+            verticalChart = new Chart(document.getElementById('verticalChart'), {
+                type: 'line',
+                data: {
+                    datasets: [{
+                        label: 'Vertical Movement',
+                        data: [],
+                        borderColor: '#dc2626',
+                        backgroundColor: 'rgba(220, 38, 38, 0.1)',
+                        borderWidth: 2,
+                        tension: 0.4,
+                        pointRadius: 0
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: true,
+                    plugins: {
+                        legend: { display: false },
+                        title: { display: true, text: 'Vertical Movement', font: { size: 14, weight: 'bold' } }
+                    },
+                    scales: {
+                        x: { 
+                            title: { display: true, text: 'Time (s)' },
+                            type: 'linear'
+                        },
+                        y: { 
+                            title: { display: true, text: 'Vertical Position (px)' },
+                            type: 'linear'
+                        }
+                    }
+                }
+            });
+            
+            // Raw trajectory - continuous line plot
+            trajectoryChart = new Chart(document.getElementById('trajectoryChart'), {
+                type: 'line',
+                data: {
+                    datasets: [{
+                        label: 'Eye Path',
+                        data: [],
+                        borderColor: '#059669',
+                        backgroundColor: 'rgba(5, 150, 105, 0.1)',
+                        borderWidth: 2,
+                        pointRadius: 1,
+                        tension: 0.1,
+                        showLine: true
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: true,
+                    plugins: {
+                        legend: { display: false },
+                        title: { display: true, text: 'Eye Movement Pattern (Raw)', font: { size: 14, weight: 'bold' } }
+                    },
+                    scales: {
+                        x: { 
+                            title: { display: true, text: 'Horizontal Position (px)' },
+                            type: 'linear'
+                        },
+                        y: { 
+                            title: { display: true, text: 'Vertical Position (px)' },
+                            type: 'linear'
+                        }
+                    }
+                }
+            });
+
+            // Smooth trajectory - filtered
+            smoothChart = new Chart(document.getElementById('smoothChart'), {
+                type: 'line',
+                data: {
+                    datasets: [{
+                        label: 'Smooth Path',
+                        data: [],
+                        borderColor: '#7c3aed',
+                        backgroundColor: 'rgba(124, 58, 237, 0.1)',
+                        borderWidth: 3,
+                        tension: 0.4,
+                        pointRadius: 0,
+                        showLine: true
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: true,
+                    plugins: {
+                        legend: { display: false },
+                        title: { display: true, text: 'Smooth Trajectory (Filtered)', font: { size: 14, weight: 'bold' } }
+                    },
+                    scales: {
+                        x: { 
+                            title: { display: true, text: 'Horizontal Position (px)' },
+                            type: 'linear'
+                        },
+                        y: { 
+                            title: { display: true, text: 'Vertical Position (px)' },
+                            type: 'linear'
+                        }
+                    }
+                }
+            });
+        }
+
+        // Initialize MediaPipe Face Mesh
+        function initFaceMesh() {
+            faceMesh = new FaceMesh({
+                locateFile: (file) => `https://cdn.jsdelivr.net/npm/@mediapipe/face_mesh/${file}`
+            });
+
+            faceMesh.setOptions({
+                maxNumFaces: 1,
+                refineLandmarks: true,
+                minDetectionConfidence: 0.5,
+                minTrackingConfidence: 0.5
+            });
+
+            faceMesh.onResults(onResults);
+        }
+
+        // Get iris center
+        function getIrisCenter(landmarks, irisIndices, width, height) {
+            if (!landmarks || !irisIndices) return null;
+            
+            const coords = irisIndices.map(idx => {
+                if (idx >= landmarks.length) return null;
+                const lm = landmarks[idx];
+                return { x: lm.x * width, y: lm.y * height };
+            }).filter(c => c !== null);
+
+            if (coords.length < 2) return null;
+
+            const centerX = coords.reduce((sum, c) => sum + c.x, 0) / coords.length;
+            const centerY = coords.reduce((sum, c) => sum + c.y, 0) / coords.length;
+
+            return { x: centerX, y: centerY };
+        }
+
+        // Process face mesh results
+        function onResults(results) {
+            const width = canvasElement.width;
+            const height = canvasElement.height;
+
+            canvasCtx.save();
+            canvasCtx.clearRect(0, 0, width, height);
+            canvasCtx.drawImage(results.image, 0, 0, width, height);
+
+            if (results.multiFaceLandmarks && results.multiFaceLandmarks[0]) {
+                const landmarks = results.multiFaceLandmarks[0];
+                
+                const leftIris = getIrisCenter(landmarks, LEFT_IRIS, width, height);
+                const rightIris = getIrisCenter(landmarks, RIGHT_IRIS, width, height);
+
+                let trackedCenter = null;
+
+                if (state.selectedEye === 'left' && rightIris) {
+                    trackedCenter = rightIris;
+                    drawIrisMarker(rightIris, 'RIGHT', '#00ff00');
+                } else if (state.selectedEye === 'right' && leftIris) {
+                    trackedCenter = leftIris;
+                    drawIrisMarker(leftIris, 'LEFT', '#00ff00');
+                }
+
+                if (state.trackingActive && trackedCenter) {
+                    addDataPoint(trackedCenter);
+                    
+                    // Capture frame for video recording
+                    if (state.mediaRecorder && state.mediaRecorder.state === 'recording') {
+                        // Frame is already being recorded by MediaRecorder
+                    }
+                }
+            }
+
+            if (state.trackingActive) {
+                canvasCtx.fillStyle = '#00ff00';
+                canvasCtx.font = 'bold 24px Arial';
+                canvasCtx.fillText('TRACKING ACTIVE', 10, 30);
+                canvasCtx.font = '18px Arial';
+                canvasCtx.fillText(`Points: ${state.timestamps.length}`, 10, 60);
+            }
+
+            canvasCtx.restore();
+            updateFpsCounter();
+        }
+
+        function drawIrisMarker(center, label, color) {
+            canvasCtx.beginPath();
+            canvasCtx.arc(center.x, center.y, 5, 0, 2 * Math.PI);
+            canvasCtx.fillStyle = color;
+            canvasCtx.fill();
+            
+            if (label) {
+                canvasCtx.fillStyle = color;
+                canvasCtx.font = 'bold 12px Arial';
+                canvasCtx.fillText(label, center.x - 20, center.y - 10);
+            }
+        }
+
+        // Add data point
+        function addDataPoint(center) {
+            if (!state.trackingActive) return;
+
+            const currentTime = Date.now();
+            if (!state.startTime) state.startTime = currentTime;
+
+            const timestamp = (currentTime - state.startTime) / 1000;
+            
+            state.timestamps.push(timestamp);
+            state.horizontalData.push(center.x);
+            state.verticalData.push(center.y);
+
+            if (state.timestamps.length > 10000) {
+                state.timestamps.shift();
+                state.horizontalData.shift();
+                state.verticalData.shift();
+            }
+        }
+
+        // Update FPS counter
+        function updateFpsCounter() {
+            state.frameCount++;
+            const currentTime = Date.now();
+            
+            if (currentTime - state.lastFpsTime >= 1000) {
+                state.currentFps = state.frameCount / ((currentTime - state.lastFpsTime) / 1000);
+                fpsLabel.textContent = `FPS: ${state.currentFps.toFixed(1)}`;
+                state.frameCount = 0;
+                state.lastFpsTime = currentTime;
+            }
+        }
+
+        // Gaussian smoothing
+        function gaussianFilter1d(data, sigma = 5.0) {
+            const size = Math.ceil(sigma * 3);
+            const kernel = [];
+            let sum = 0;
+            
+            for (let i = -size; i <= size; i++) {
+                const val = Math.exp(-(i * i) / (2 * sigma * sigma));
+                kernel.push(val);
+                sum += val;
+            }
+            
+            const normalizedKernel = kernel.map(v => v / sum);
+            const result = [];
+            
+            for (let i = 0; i < data.length; i++) {
+                let weightedSum = 0;
+                let weightSum = 0;
+                
+                for (let j = 0; j < normalizedKernel.length; j++) {
+                    const dataIndex = i + j - size;
+                    if (dataIndex >= 0 && dataIndex < data.length) {
+                        weightedSum += data[dataIndex] * normalizedKernel[j];
+                        weightSum += normalizedKernel[j];
+                    }
+                }
+                
+                result.push(weightedSum / weightSum);
+            }
+            
+            return result;
+        }
+
+        // Update charts
+        function updateCharts() {
+            if (state.timestamps.length < 2) return;
+
+            const filteredH = gaussianFilter1d(state.horizontalData, 5.0);
+            const filteredV = gaussianFilter1d(state.verticalData, 5.0);
+            const invertedV = state.verticalData.map(y => state.videoHeight - y);
+            const filteredInvertedV = filteredV.map(y => state.videoHeight - y);
+
+            // Horizontal chart - X: horizontal position, Y: time (reversed)
+            const horizontalPoints = filteredH.map((x, i) => ({ x: x, y: state.timestamps[i] }));
+            horizontalChart.data.datasets[0].data = horizontalPoints;
+            horizontalChart.update('none');
+
+            // Vertical chart - X: time, Y: vertical position
+            const verticalPoints = state.timestamps.map((t, i) => ({ x: t, y: filteredInvertedV[i] }));
+            verticalChart.data.datasets[0].data = verticalPoints;
+            verticalChart.update('none');
+
+            // Raw trajectory - continuous line of all points
+            const rawTrajectoryPoints = state.horizontalData.map((x, i) => ({
+                x: x,
+                y: invertedV[i]
+            }));
+            trajectoryChart.data.datasets[0].data = rawTrajectoryPoints;
+            trajectoryChart.update('none');
+
+            // Smooth trajectory - filtered data
+            const smoothTrajectoryPoints = filteredH.map((x, i) => ({ 
+                x: x, 
+                y: filteredInvertedV[i] 
+            }));
+            smoothChart.data.datasets[0].data = smoothTrajectoryPoints;
+            smoothChart.update('none');
+        }
+
+        // Start camera
+        async function startCamera() {
+            try {
+                const stream = await navigator.mediaDevices.getUserMedia({
+                    video: { 
+                        facingMode: 'user',
+                        width: { ideal: 1280 },
+                        height: { ideal: 720 }
+                    }
+                });
+
+                webcamElement.srcObject = stream;
+                
+                webcamElement.onloadedmetadata = () => {
+                    state.videoWidth = webcamElement.videoWidth;
+                    state.videoHeight = webcamElement.videoHeight;
+                    canvasElement.width = state.videoWidth;
+                    canvasElement.height = state.videoHeight;
+                    
+                    camera = new Camera(webcamElement, {
+                        onFrame: async () => {
+                            await faceMesh.send({ image: webcamElement });
+                        },
+                        width: state.videoWidth,
+                        height: state.videoHeight
+                    });
+                    camera.start();
+                    state.cameraActive = true;
+                };
+            } catch (error) {
+                alert('Camera access denied or not available: ' + error.message);
+            }
+        }
+
+        // Fullscreen dot animation
+        let dotAnimation;
+        let dotCountdownInterval;
+
+        function startFullscreenDot() {
+            fullscreenDot.classList.add('active');
+            countdown.style.display = 'block';
+            movingDot.style.display = 'none';
+            
+            let count = 3;
+            countdown.textContent = count;
+            
+            dotCountdownInterval = setInterval(() => {
+                count--;
+                if (count > 0) {
+                    countdown.textContent = count;
+                } else {
+                    countdown.textContent = 'GO!';
+                    setTimeout(() => {
+                        countdown.style.display = 'none';
+                        movingDot.style.display = 'block';
+                        startActualTracking();
+                        animateDot();
+                    }, 500);
+                    clearInterval(dotCountdownInterval);
+                }
+            }, 1000);
+        }
+
+        function animateDot() {
+            const margin = 40;
+            const width = window.innerWidth - 2 * margin;
+            const height = window.innerHeight - 2 * margin;
+            const perimeter = 2 * (width + height);
+            const speed = 140; // Increased from 80 to 140 (1.75x faster)
+            
+            let t = 0;
+            const startTime = Date.now();
+            
+            dotAnimation = setInterval(() => {
+                const elapsed = (Date.now() - startTime) / 1000;
+                t = (elapsed * speed) % perimeter;
+                
+                let x, y;
+                if (t <= width) {
+                    x = margin + t;
+                    y = margin;
+                } else if (t <= width + height) {
+                    x = window.innerWidth - margin;
+                    y = margin + (t - width);
+                } else if (t <= 2 * width + height) {
+                    x = window.innerWidth - margin - (t - width - height);
+                    y = window.innerHeight - margin;
+                } else {
+                    x = margin;
+                    y = window.innerHeight - margin - (t - 2 * width - height);
+                }
+                
+                movingDot.style.left = (x - 11) + 'px';
+                movingDot.style.top = (y - 11) + 'px';
+            }, 10);
+        }
+
+        function stopFullscreenDot() {
+            clearInterval(dotAnimation);
+            clearInterval(dotCountdownInterval);
+            fullscreenDot.classList.remove('active');
+            countdown.style.display = 'block';
+            movingDot.style.display = 'none';
+        }
+
+        // Event listeners
+        document.querySelectorAll('input[name="eye"]').forEach(radio => {
+            radio.addEventListener('change', (e) => {
+                state.selectedEye = e.target.value;
+                startBtn.disabled = false;
+            });
+        });
+
+        startBtn.addEventListener('click', async () => {
+            const name = prompt('Enter patient name (or leave blank):');
+            state.patientName = name && name.trim() ? name.trim() : `Patient_${new Date().toISOString().slice(0, 19).replace(/:/g, '-')}`;
+            
+            state.timestamps = [];
+            state.horizontalData = [];
+            state.verticalData = [];
+            state.startTime = null;
+            state.recordedChunks = [];
+            
+            startBtn.disabled = true;
+            stopBtn.disabled = false;
+            resetBtn.disabled = true;
+            saveBtn.disabled = true;
+            
+            // Start video recording
+            try {
+                const canvasStream = canvasElement.captureStream(30);
+                state.mediaRecorder = new MediaRecorder(canvasStream, {
+                    mimeType: 'video/webm;codecs=vp9',
+                    videoBitsPerSecond: 2500000
+                });
+                
+                state.mediaRecorder.ondataavailable = (event) => {
+                    if (event.data.size > 0) {
+                        state.recordedChunks.push(event.data);
+                    }
+                };
+                
+                state.mediaRecorder.start();
+                console.log('Video recording started');
+            } catch (err) {
+                console.error('Failed to start recording:', err);
+            }
+            
+            startFullscreenDot();
+        });
+
+        function startActualTracking() {
+            state.trackingActive = true;
+            state.startTime = Date.now();
+            
+            const chartUpdateInterval = setInterval(() => {
+                if (!state.trackingActive) {
+                    clearInterval(chartUpdateInterval);
+                    return;
+                }
+                updateCharts();
+            }, 100);
+        }
+
+        stopBtn.addEventListener('click', () => {
+            state.trackingActive = false;
+            stopFullscreenDot();
+            
+            // Stop video recording
+            if (state.mediaRecorder && state.mediaRecorder.state !== 'inactive') {
+                state.mediaRecorder.stop();
+                console.log('Video recording stopped');
+            }
+            
+            startBtn.disabled = false;
+            stopBtn.disabled = true;
+            resetBtn.disabled = false;
+            
+            if (state.timestamps.length > 0) {
+                saveBtn.disabled = false;
+                const duration = state.timestamps[state.timestamps.length - 1];
+                alert(`Tracking stopped!\n\nData Points: ${state.timestamps.length}\nDuration: ${duration.toFixed(2)}s`);
+            } else {
+                alert('Tracking stopped! No data collected.');
+            }
+        });
+
+        resetBtn.addEventListener('click', () => {
+            state.timestamps = [];
+            state.horizontalData = [];
+            state.verticalData = [];
+            state.startTime = null;
+            
+            horizontalChart.data.labels = [];
+            horizontalChart.data.datasets[0].data = [];
+            horizontalChart.update();
+            
+            verticalChart.data.labels = [];
+            verticalChart.data.datasets[0].data = [];
+            verticalChart.update();
+            
+            trajectoryChart.data.datasets[0].data = [];
+            trajectoryChart.update();
+            
+            smoothChart.data.datasets[0].data = [];
+            smoothChart.update();
+            
+            resetBtn.disabled = true;
+            saveBtn.disabled = true;
+        });
+
+        saveBtn.addEventListener('click', async () => {
+            if (state.timestamps.length === 0) {
+                alert('No data to save');
+                return;
+            }
+
+            const timestamp = new Date().toISOString().slice(0, 19).replace(/:/g, '-');
+            const baseFilename = `${state.patientName}_${state.selectedEye}_${timestamp}`;
+
+            // 1. Save CSV with velocities
+            const velocities = [0];
+            for (let i = 1; i < state.horizontalData.length; i++) {
+                const dx = state.horizontalData[i] - state.horizontalData[i - 1];
+                const dy = state.verticalData[i] - state.verticalData[i - 1];
+                const dt = state.timestamps[i] - state.timestamps[i - 1];
+                const distance = Math.sqrt(dx * dx + dy * dy);
+                velocities.push(dt > 0 ? distance / dt : 0);
+            }
+
+            let csv = 'timestamp_seconds,x_position_px,y_position_px,velocity_px_per_sec\n';
+            for (let i = 0; i < state.timestamps.length; i++) {
+                csv += `${state.timestamps[i]},${state.horizontalData[i]},${state.verticalData[i]},${velocities[i]}\n`;
+            }
+
+            downloadFile(csv, `${baseFilename}_coordinates.csv`, 'text/csv');
+
+            // 2. Save video recording
+            if (state.recordedChunks.length > 0) {
+                const blob = new Blob(state.recordedChunks, { type: 'video/webm' });
+                const url = URL.createObjectURL(blob);
+                const a = document.createElement('a');
+                a.href = url;
+                a.download = `${baseFilename}_tracking_video.webm`;
+                a.click();
+                URL.revokeObjectURL(url);
+            }
+
+            // 3. Save all 4 charts as images
+            await saveChartImage(horizontalChart, `${baseFilename}_horizontal_chart.png`);
+            await saveChartImage(verticalChart, `${baseFilename}_vertical_chart.png`);
+            await saveChartImage(trajectoryChart, `${baseFilename}_trajectory_chart.png`);
+            await saveChartImage(smoothChart, `${baseFilename}_smooth_chart.png`);
+
+            // 4. Create combined analysis image
+            await saveCombinedCharts(baseFilename);
+
+            alert('✅ All data saved successfully!\n\n' +
+                  '📊 4 individual chart images\n' +
+                  '🖼️ 1 combined analysis image\n' +
+                  '📄 CSV coordinate data\n' +
+                  '🎥 Tracking video');
+        });
+
+        function downloadFile(content, filename, type) {
+            const blob = new Blob([content], { type: type });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = filename;
+            a.click();
+            URL.revokeObjectURL(url);
+        }
+
+        async function saveChartImage(chart, filename) {
+            return new Promise((resolve) => {
+                chart.canvas.toBlob((blob) => {
+                    const url = URL.createObjectURL(blob);
+                    const a = document.createElement('a');
+                    a.href = url;
+                    a.download = filename;
+                    a.click();
+                    URL.revokeObjectURL(url);
+                    resolve();
+                });
+            });
+        }
+
+        async function saveCombinedCharts(baseFilename) {
+            const canvas = document.createElement('canvas');
+            canvas.width = 1600;
+            canvas.height = 1200;
+            const ctx = canvas.getContext('2d');
+            
+            // White background
+            ctx.fillStyle = '#f8f9fa';
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
+            
+            // Title
+            ctx.fillStyle = '#1f2937';
+            ctx.font = 'bold 24px Arial';
+            ctx.textAlign = 'center';
+            ctx.fillText(`Eye Tracking Analysis - ${state.patientName} - ${state.selectedEye.toUpperCase()} Eye`, canvas.width / 2, 40);
+            
+            // Draw 4 charts in 2x2 grid
+            const chartWidth = 750;
+            const chartHeight = 550;
+            const spacing = 50;
+            const startY = 80;
+            
+            ctx.drawImage(horizontalChart.canvas, 50, startY, chartWidth, chartHeight);
+            ctx.drawImage(trajectoryChart.canvas, 50 + chartWidth + spacing, startY, chartWidth, chartHeight);
+            ctx.drawImage(verticalChart.canvas, 50, startY + chartHeight + spacing, chartWidth, chartHeight);
+            ctx.drawImage(smoothChart.canvas, 50 + chartWidth + spacing, startY + chartHeight + spacing, chartWidth, chartHeight);
+            
+            canvas.toBlob((blob) => {
+                const url = URL.createObjectURL(blob);
+                const a = document.createElement('a');
+                a.href = url;
+                a.download = `${baseFilename}_combined_analysis.png`;
+                a.click();
+                URL.revokeObjectURL(url);
+            });
+        }
+
+        exitBtn.addEventListener('click', () => {
+            if (confirm('Are you sure you want to exit?')) {
+                window.close();
+            }
+        });
+
+        // Keyboard shortcuts
+        document.addEventListener('keydown', (e) => {
+            if (e.key === 'Escape' && fullscreenDot.classList.contains('active')) {
+                stopBtn.click();
+            }
+        });
+
+        // Initialize on page load
+        window.addEventListener('load', () => {
+            initCharts();
+            initFaceMesh();
+            startCamera();
+        });
+    </script>
+</body>
+</html>
