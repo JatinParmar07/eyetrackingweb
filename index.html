@@ -284,11 +284,11 @@
                 <div class="radio-group">
                     <label class="radio-label">
                         <input type="radio" name="eye" value="left">
-                        Right Eye
+                        Left Eye
                     </label>
                     <label class="radio-label">
                         <input type="radio" name="eye" value="right">
-                        Left Eye
+                        Right Eye
                     </label>
                 </div>
             </div>
@@ -376,8 +376,11 @@
         // Charts
         let horizontalChart, trajectoryChart, verticalChart, smoothChart;
 
-        // Initialize Charts
+        // Initialize Charts with enhanced styling
         function initCharts() {
+            Chart.defaults.font.family = "'Segoe UI', 'Arial', sans-serif";
+            Chart.defaults.color = '#374151';
+            
             // Horizontal chart - time on Y axis (top to bottom)
             horizontalChart = new Chart(document.getElementById('horizontalChart'), {
                 type: 'line',
@@ -385,11 +388,12 @@
                     datasets: [{
                         label: 'Horizontal Movement',
                         data: [],
-                        borderColor: '#2563eb',
-                        backgroundColor: 'rgba(37, 99, 235, 0.1)',
-                        borderWidth: 2,
-                        tension: 0.4,
-                        pointRadius: 0
+                        borderColor: '#3b82f6',
+                        backgroundColor: 'rgba(59, 130, 246, 0.1)',
+                        borderWidth: 3,
+                        tension: 0.3,
+                        pointRadius: 0,
+                        fill: true
                     }]
                 },
                 options: {
@@ -397,17 +401,25 @@
                     maintainAspectRatio: true,
                     plugins: {
                         legend: { display: false },
-                        title: { display: true, text: 'Horizontal Movement', font: { size: 14, weight: 'bold' } }
+                        title: { 
+                            display: true, 
+                            text: 'Horizontal Movement Over Time', 
+                            font: { size: 15, weight: 'bold' },
+                            color: '#1f2937',
+                            padding: 20
+                        }
                     },
                     scales: {
                         x: { 
-                            title: { display: true, text: 'Horizontal Position (px)' },
-                            type: 'linear'
+                            title: { display: true, text: 'Horizontal Position (px)', font: { size: 12, weight: '600' } },
+                            type: 'linear',
+                            grid: { color: 'rgba(0, 0, 0, 0.05)' }
                         },
                         y: { 
-                            title: { display: true, text: 'Time (s)' },
+                            title: { display: true, text: 'Time (seconds)', font: { size: 12, weight: '600' } },
                             reverse: true,
-                            type: 'linear'
+                            type: 'linear',
+                            grid: { color: 'rgba(0, 0, 0, 0.05)' }
                         }
                     }
                 }
@@ -420,11 +432,12 @@
                     datasets: [{
                         label: 'Vertical Movement',
                         data: [],
-                        borderColor: '#dc2626',
-                        backgroundColor: 'rgba(220, 38, 38, 0.1)',
-                        borderWidth: 2,
-                        tension: 0.4,
-                        pointRadius: 0
+                        borderColor: '#ef4444',
+                        backgroundColor: 'rgba(239, 68, 68, 0.1)',
+                        borderWidth: 3,
+                        tension: 0.3,
+                        pointRadius: 0,
+                        fill: true
                     }]
                 },
                 options: {
@@ -432,86 +445,169 @@
                     maintainAspectRatio: true,
                     plugins: {
                         legend: { display: false },
-                        title: { display: true, text: 'Vertical Movement', font: { size: 14, weight: 'bold' } }
+                        title: { 
+                            display: true, 
+                            text: 'Vertical Movement Over Time', 
+                            font: { size: 15, weight: 'bold' },
+                            color: '#1f2937',
+                            padding: 20
+                        }
                     },
                     scales: {
                         x: { 
-                            title: { display: true, text: 'Time (s)' },
-                            type: 'linear'
+                            title: { display: true, text: 'Time (seconds)', font: { size: 12, weight: '600' } },
+                            type: 'linear',
+                            grid: { color: 'rgba(0, 0, 0, 0.05)' }
                         },
                         y: { 
-                            title: { display: true, text: 'Vertical Position (px)' },
-                            type: 'linear'
+                            title: { display: true, text: 'Vertical Position (px)', font: { size: 12, weight: '600' } },
+                            type: 'linear',
+                            grid: { color: 'rgba(0, 0, 0, 0.05)' }
                         }
                     }
                 }
             });
             
-            // Raw trajectory - continuous line plot
+            // Raw trajectory - with start/end markers
             trajectoryChart = new Chart(document.getElementById('trajectoryChart'), {
-                type: 'line',
+                type: 'scatter',
                 data: {
-                    datasets: [{
-                        label: 'Eye Path',
-                        data: [],
-                        borderColor: '#059669',
-                        backgroundColor: 'rgba(5, 150, 105, 0.1)',
-                        borderWidth: 2,
-                        pointRadius: 1,
-                        tension: 0.1,
-                        showLine: true
-                    }]
+                    datasets: [
+                        {
+                            label: 'Eye Path',
+                            data: [],
+                            borderColor: '#10b981',
+                            backgroundColor: 'rgba(16, 185, 129, 0.6)',
+                            borderWidth: 2,
+                            pointRadius: 2,
+                            showLine: true,
+                            tension: 0.1
+                        },
+                        {
+                            label: 'Start',
+                            data: [],
+                            backgroundColor: '#22c55e',
+                            borderColor: '#16a34a',
+                            borderWidth: 3,
+                            pointRadius: 8,
+                            pointStyle: 'circle'
+                        },
+                        {
+                            label: 'End',
+                            data: [],
+                            backgroundColor: '#ef4444',
+                            borderColor: '#dc2626',
+                            borderWidth: 3,
+                            pointRadius: 8,
+                            pointStyle: 'rectRot'
+                        }
+                    ]
                 },
                 options: {
                     responsive: true,
                     maintainAspectRatio: true,
                     plugins: {
-                        legend: { display: false },
-                        title: { display: true, text: 'Eye Movement Pattern (Raw)', font: { size: 14, weight: 'bold' } }
+                        legend: { 
+                            display: true,
+                            position: 'top',
+                            labels: { 
+                                boxWidth: 12,
+                                font: { size: 11, weight: '600' },
+                                padding: 15,
+                                usePointStyle: true
+                            }
+                        },
+                        title: { 
+                            display: true, 
+                            text: '2D Eye Movement Pattern (Raw)', 
+                            font: { size: 15, weight: 'bold' },
+                            color: '#1f2937',
+                            padding: 20
+                        }
                     },
                     scales: {
                         x: { 
-                            title: { display: true, text: 'Horizontal Position (px)' },
-                            type: 'linear'
+                            title: { display: true, text: 'Horizontal Position (px)', font: { size: 12, weight: '600' } },
+                            type: 'linear',
+                            grid: { color: 'rgba(0, 0, 0, 0.05)' }
                         },
                         y: { 
-                            title: { display: true, text: 'Vertical Position (px)' },
-                            type: 'linear'
+                            title: { display: true, text: 'Vertical Position (px)', font: { size: 12, weight: '600' } },
+                            type: 'linear',
+                            grid: { color: 'rgba(0, 0, 0, 0.05)' }
                         }
                     }
                 }
             });
 
-            // Smooth trajectory - filtered
+            // Smooth trajectory - with start/end markers
             smoothChart = new Chart(document.getElementById('smoothChart'), {
-                type: 'line',
+                type: 'scatter',
                 data: {
-                    datasets: [{
-                        label: 'Smooth Path',
-                        data: [],
-                        borderColor: '#7c3aed',
-                        backgroundColor: 'rgba(124, 58, 237, 0.1)',
-                        borderWidth: 3,
-                        tension: 0.4,
-                        pointRadius: 0,
-                        showLine: true
-                    }]
+                    datasets: [
+                        {
+                            label: 'Smooth Path',
+                            data: [],
+                            borderColor: '#8b5cf6',
+                            backgroundColor: 'rgba(139, 92, 246, 0.15)',
+                            borderWidth: 3,
+                            tension: 0.4,
+                            pointRadius: 0,
+                            showLine: true,
+                            fill: true
+                        },
+                        {
+                            label: 'Start',
+                            data: [],
+                            backgroundColor: '#22c55e',
+                            borderColor: '#16a34a',
+                            borderWidth: 3,
+                            pointRadius: 8,
+                            pointStyle: 'circle'
+                        },
+                        {
+                            label: 'End',
+                            data: [],
+                            backgroundColor: '#ef4444',
+                            borderColor: '#dc2626',
+                            borderWidth: 3,
+                            pointRadius: 8,
+                            pointStyle: 'rectRot'
+                        }
+                    ]
                 },
                 options: {
                     responsive: true,
                     maintainAspectRatio: true,
                     plugins: {
-                        legend: { display: false },
-                        title: { display: true, text: 'Smooth Trajectory (Filtered)', font: { size: 14, weight: 'bold' } }
+                        legend: { 
+                            display: true,
+                            position: 'top',
+                            labels: { 
+                                boxWidth: 12,
+                                font: { size: 11, weight: '600' },
+                                padding: 15,
+                                usePointStyle: true
+                            }
+                        },
+                        title: { 
+                            display: true, 
+                            text: 'Smooth Trajectory (Filtered - No Noise)', 
+                            font: { size: 15, weight: 'bold' },
+                            color: '#1f2937',
+                            padding: 20
+                        }
                     },
                     scales: {
                         x: { 
-                            title: { display: true, text: 'Horizontal Position (px)' },
-                            type: 'linear'
+                            title: { display: true, text: 'Horizontal Position (px)', font: { size: 12, weight: '600' } },
+                            type: 'linear',
+                            grid: { color: 'rgba(0, 0, 0, 0.05)' }
                         },
                         y: { 
-                            title: { display: true, text: 'Vertical Position (px)' },
-                            type: 'linear'
+                            title: { display: true, text: 'Vertical Position (px)', font: { size: 12, weight: '600' } },
+                            type: 'linear',
+                            grid: { color: 'rgba(0, 0, 0, 0.05)' }
                         }
                     }
                 }
@@ -569,12 +665,12 @@
 
                 let trackedCenter = null;
 
-                if (state.selectedEye === 'left' && rightIris) {
-                    trackedCenter = rightIris;
-                    drawIrisMarker(rightIris, 'RIGHT', '#00ff00');
-                } else if (state.selectedEye === 'right' && leftIris) {
+                if (state.selectedEye === 'left' && leftIris) {
                     trackedCenter = leftIris;
                     drawIrisMarker(leftIris, 'LEFT', '#00ff00');
+                } else if (state.selectedEye === 'right' && rightIris) {
+                    trackedCenter = rightIris;
+                    drawIrisMarker(rightIris, 'RIGHT', '#00ff00');
                 }
 
                 if (state.trackingActive && trackedCenter) {
@@ -684,8 +780,6 @@
 
             const filteredH = gaussianFilter1d(state.horizontalData, 5.0);
             const filteredV = gaussianFilter1d(state.verticalData, 5.0);
-            const invertedV = state.verticalData.map(y => state.videoHeight - y);
-            const filteredInvertedV = filteredV.map(y => state.videoHeight - y);
 
             // Horizontal chart - X: horizontal position, Y: time (reversed)
             const horizontalPoints = filteredH.map((x, i) => ({ x: x, y: state.timestamps[i] }));
@@ -693,24 +787,36 @@
             horizontalChart.update('none');
 
             // Vertical chart - X: time, Y: vertical position
-            const verticalPoints = state.timestamps.map((t, i) => ({ x: t, y: filteredInvertedV[i] }));
+            const verticalPoints = state.timestamps.map((t, i) => ({ x: t, y: filteredV[i] }));
             verticalChart.data.datasets[0].data = verticalPoints;
             verticalChart.update('none');
 
-            // Raw trajectory - continuous line of all points
+            // Raw trajectory - all points with start/end markers
             const rawTrajectoryPoints = state.horizontalData.map((x, i) => ({
                 x: x,
-                y: invertedV[i]
+                y: state.verticalData[i]
             }));
             trajectoryChart.data.datasets[0].data = rawTrajectoryPoints;
+            
+            // Add start and end markers
+            if (rawTrajectoryPoints.length > 0) {
+                trajectoryChart.data.datasets[1].data = [rawTrajectoryPoints[0]];
+                trajectoryChart.data.datasets[2].data = [rawTrajectoryPoints[rawTrajectoryPoints.length - 1]];
+            }
             trajectoryChart.update('none');
 
-            // Smooth trajectory - filtered data
+            // Smooth trajectory - filtered data with start/end markers
             const smoothTrajectoryPoints = filteredH.map((x, i) => ({ 
                 x: x, 
-                y: filteredInvertedV[i] 
+                y: filteredV[i] 
             }));
             smoothChart.data.datasets[0].data = smoothTrajectoryPoints;
+            
+            // Add start and end markers
+            if (smoothTrajectoryPoints.length > 0) {
+                smoothChart.data.datasets[1].data = [smoothTrajectoryPoints[0]];
+                smoothChart.data.datasets[2].data = [smoothTrajectoryPoints[smoothTrajectoryPoints.length - 1]];
+            }
             smoothChart.update('none');
         }
 
@@ -838,7 +944,8 @@
                 console.error('Frame processing error:', err);
             }
 
-            animationFrameId = requestAnimationFrame(processVideoFrame);
+            // Use setTimeout instead of requestAnimationFrame for better mobile performance
+            setTimeout(() => processVideoFrame(), 33); // ~30fps
         }
 
         // Fullscreen dot animation
@@ -1081,30 +1188,84 @@
 
         async function saveCombinedCharts(baseFilename) {
             const canvas = document.createElement('canvas');
-            canvas.width = 1600;
-            canvas.height = 1200;
+            canvas.width = 1920;
+            canvas.height = 1440;
             const ctx = canvas.getContext('2d');
             
-            // White background
-            ctx.fillStyle = '#f8f9fa';
+            // Gradient background
+            const gradient = ctx.createLinearGradient(0, 0, 0, canvas.height);
+            gradient.addColorStop(0, '#f8fafc');
+            gradient.addColorStop(1, '#e0e7ff');
+            ctx.fillStyle = gradient;
             ctx.fillRect(0, 0, canvas.width, canvas.height);
             
-            // Title
-            ctx.fillStyle = '#1f2937';
-            ctx.font = 'bold 24px Arial';
+            // Title section with background
+            ctx.fillStyle = 'rgba(255, 255, 255, 0.9)';
+            ctx.fillRect(0, 0, canvas.width, 100);
+            
+            // Main title
+            ctx.fillStyle = '#1e293b';
+            ctx.font = 'bold 32px "Segoe UI", Arial, sans-serif';
             ctx.textAlign = 'center';
-            ctx.fillText(`Eye Tracking Analysis - ${state.patientName} - ${state.selectedEye.toUpperCase()} Eye`, canvas.width / 2, 40);
+            ctx.fillText(`Eye Tracking Analysis Report`, canvas.width / 2, 45);
             
-            // Draw 4 charts in 2x2 grid
-            const chartWidth = 750;
-            const chartHeight = 550;
-            const spacing = 50;
-            const startY = 80;
+            // Subtitle
+            ctx.fillStyle = '#475569';
+            ctx.font = '20px "Segoe UI", Arial, sans-serif';
+            ctx.fillText(`Patient: ${state.patientName} | Eye: ${state.selectedEye.toUpperCase()} | Date: ${new Date().toLocaleDateString()}`, canvas.width / 2, 80);
             
-            ctx.drawImage(horizontalChart.canvas, 50, startY, chartWidth, chartHeight);
-            ctx.drawImage(trajectoryChart.canvas, 50 + chartWidth + spacing, startY, chartWidth, chartHeight);
-            ctx.drawImage(verticalChart.canvas, 50, startY + chartHeight + spacing, chartWidth, chartHeight);
-            ctx.drawImage(smoothChart.canvas, 50 + chartWidth + spacing, startY + chartHeight + spacing, chartWidth, chartHeight);
+            // Draw decorative line
+            ctx.strokeStyle = '#3b82f6';
+            ctx.lineWidth = 3;
+            ctx.beginPath();
+            ctx.moveTo(100, 95);
+            ctx.lineTo(canvas.width - 100, 95);
+            ctx.stroke();
+            
+            // Draw 4 charts in 2x2 grid with borders
+            const chartWidth = 900;
+            const chartHeight = 650;
+            const spacingX = 60;
+            const spacingY = 60;
+            const startX = 60;
+            const startY = 120;
+            
+            // Add white backgrounds for charts
+            ctx.fillStyle = 'white';
+            ctx.shadowColor = 'rgba(0, 0, 0, 0.1)';
+            ctx.shadowBlur = 10;
+            ctx.shadowOffsetX = 2;
+            ctx.shadowOffsetY = 2;
+            
+            // Chart backgrounds
+            ctx.fillRect(startX - 10, startY - 10, chartWidth + 20, chartHeight + 20);
+            ctx.fillRect(startX + chartWidth + spacingX - 10, startY - 10, chartWidth + 20, chartHeight + 20);
+            ctx.fillRect(startX - 10, startY + chartHeight + spacingY - 10, chartWidth + 20, chartHeight + 20);
+            ctx.fillRect(startX + chartWidth + spacingX - 10, startY + chartHeight + spacingY - 10, chartWidth + 20, chartHeight + 20);
+            
+            ctx.shadowColor = 'transparent';
+            
+            // Draw charts
+            ctx.drawImage(horizontalChart.canvas, startX, startY, chartWidth, chartHeight);
+            ctx.drawImage(trajectoryChart.canvas, startX + chartWidth + spacingX, startY, chartWidth, chartHeight);
+            ctx.drawImage(verticalChart.canvas, startX, startY + chartHeight + spacingY, chartWidth, chartHeight);
+            ctx.drawImage(smoothChart.canvas, startX + chartWidth + spacingX, startY + chartHeight + spacingY, chartWidth, chartHeight);
+            
+            // Add statistics footer
+            const duration = state.timestamps[state.timestamps.length - 1] || 0;
+            const dataPoints = state.timestamps.length;
+            
+            ctx.fillStyle = 'rgba(255, 255, 255, 0.95)';
+            ctx.fillRect(0, canvas.height - 60, canvas.width, 60);
+            
+            ctx.fillStyle = '#1e293b';
+            ctx.font = 'bold 16px "Segoe UI", Arial, sans-serif';
+            ctx.textAlign = 'center';
+            ctx.fillText(
+                `Session Summary: ${dataPoints} data points | Duration: ${duration.toFixed(2)}s | Generated: ${new Date().toLocaleString()}`,
+                canvas.width / 2,
+                canvas.height - 25
+            );
             
             canvas.toBlob((blob) => {
                 const url = URL.createObjectURL(blob);
