@@ -229,7 +229,7 @@
 
         .stop-tracking-btn {
             position: fixed;
-            bottom: 30px;
+            bottom: 10px;
             left: 50%;
             transform: translateX(-50%);
             padding: 15px 40px;
@@ -713,37 +713,77 @@
             smoothChart.update('none');
         }
 
-        // Start camera
+        // Start camera with better mobile support
         async function startCamera() {
             try {
+                // First check if mediaDevices is available
+                if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+                    throw new Error('Camera API not supported in this browser');
+                }
+
                 const constraints = {
                     video: {
                         facingMode: 'user',
-                        width: { ideal: 1280 },
-                        height: { ideal: 720 }
+                        width: { ideal: 1280, min: 640 },
+                        height: { ideal: 720, min: 480 }
                     },
                     audio: false
                 };
 
+                console.log('Requesting camera access...');
                 const stream = await navigator.mediaDevices.getUserMedia(constraints);
-                webcamElement.srcObject = stream;
                 
-                await new Promise((resolve) => {
+                console.log('Camera stream obtained');
+                webcamElement.srcObject = stream;
+                webcamElement.setAttribute('playsinline', 'true');
+                webcamElement.setAttribute('autoplay', 'true');
+                
+                // Wait for video metadata to load
+                await new Promise((resolve, reject) => {
                     webcamElement.onloadedmetadata = () => {
+                        console.log('Video metadata loaded');
                         resolve();
                     };
+                    webcamElement.onerror = (e) => {
+                        console.error('Video element error:', e);
+                        reject(new Error('Failed to load video'));
+                    };
+                    // Timeout after 5 seconds
+                    setTimeout(() => reject(new Error('Video loading timeout')), 5000);
                 });
 
-                await webcamElement.play();
+                // Ensure video is playing
+                try {
+                    await webcamElement.play();
+                    console.log('Video playing');
+                } catch (playError) {
+                    console.error('Play error:', playError);
+                    // Try again with user interaction
+                    await new Promise((resolve) => {
+                        const playButton = document.createElement('button');
+                        playButton.textContent = 'Tap to start camera';
+                        playButton.style.cssText = 'position: fixed; top: 50%; left: 50%; transform: translate(-50%, -50%); z-index: 10000; padding: 20px; font-size: 18px;';
+                        document.body.appendChild(playButton);
+                        playButton.onclick = async () => {
+                            await webcamElement.play();
+                            document.body.removeChild(playButton);
+                            resolve();
+                        };
+                    });
+                }
                 
                 state.videoWidth = webcamElement.videoWidth;
                 state.videoHeight = webcamElement.videoHeight;
                 canvasElement.width = state.videoWidth;
                 canvasElement.height = state.videoHeight;
                 
+                console.log(`Video dimensions: ${state.videoWidth}x${state.videoHeight}`);
+                
                 camera = new Camera(webcamElement, {
                     onFrame: async () => {
-                        await faceMesh.send({ image: webcamElement });
+                        if (state.cameraActive) {
+                            await faceMesh.send({ image: webcamElement });
+                        }
                     },
                     width: state.videoWidth,
                     height: state.videoHeight
@@ -755,7 +795,19 @@
                 
             } catch (error) {
                 console.error('Camera error:', error);
-                alert('Camera access denied or not available. Please allow camera permissions and reload the page.\n\nError: ' + error.message);
+                let errorMsg = 'Camera access failed. ';
+                
+                if (error.name === 'NotAllowedError' || error.name === 'PermissionDeniedError') {
+                    errorMsg += 'Please allow camera permissions in your browser settings and reload the page.';
+                } else if (error.name === 'NotFoundError' || error.name === 'DevicesNotFoundError') {
+                    errorMsg += 'No camera found on this device.';
+                } else if (error.name === 'NotReadableError' || error.name === 'TrackStartError') {
+                    errorMsg += 'Camera is already in use by another application.';
+                } else {
+                    errorMsg += error.message || 'Unknown error occurred.';
+                }
+                
+                alert(errorMsg);
             }
         }
 
@@ -766,7 +818,12 @@
         function startFullscreenDot() {
             fullscreenDot.classList.add('active');
             countdown.style.display = 'block';
-            movingDot.style.display = 'none';
+            movingDot.style.display = 'block';
+            
+            // Set initial dot position (top-left corner with margin)
+            const margin = 40;
+            movingDot.style.left = (margin - 11) + 'px';
+            movingDot.style.top = (margin - 11) + 'px';
             
             let count = 3;
             countdown.textContent = count;
@@ -779,7 +836,6 @@
                     countdown.textContent = 'GO!';
                     setTimeout(() => {
                         countdown.style.display = 'none';
-                        movingDot.style.display = 'block';
                         startActualTracking();
                         animateDot();
                     }, 500);
@@ -790,10 +846,11 @@
 
         function animateDot() {
             const margin = 40;
+            const buttonHeight = 70; // Height reserved for stop button at bottom
             const width = window.innerWidth - 2 * margin;
-            const height = window.innerHeight - 2 * margin;
+            const height = window.innerHeight - 2 * margin - buttonHeight;
             const perimeter = 2 * (width + height);
-            const speed = 140; // Increased from 80 to 140 (1.75x faster)
+            const speed = 140; // 1.75x faster
             
             let t = 0;
             const startTime = Date.now();
@@ -811,10 +868,10 @@
                     y = margin + (t - width);
                 } else if (t <= 2 * width + height) {
                     x = window.innerWidth - margin - (t - width - height);
-                    y = window.innerHeight - margin;
+                    y = margin + height;
                 } else {
                     x = margin;
-                    y = window.innerHeight - margin - (t - 2 * width - height);
+                    y = margin + height - (t - 2 * width - height);
                 }
                 
                 movingDot.style.left = (x - 11) + 'px';
