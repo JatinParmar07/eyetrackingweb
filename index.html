@@ -354,6 +354,7 @@
         // MediaPipe Face Mesh
         let faceMesh;
         let camera;
+        let animationFrameId;
         const LEFT_IRIS = [474, 475, 476, 477];
         const RIGHT_IRIS = [469, 470, 471, 472];
 
@@ -713,7 +714,7 @@
             smoothChart.update('none');
         }
 
-        // Start camera with better mobile support
+        // Start camera - Mobile-friendly version without MediaPipe Camera utility
         async function startCamera() {
             try {
                 // Stop any existing streams first
@@ -723,11 +724,17 @@
                     webcamElement.srcObject = null;
                 }
 
-                // First check if mediaDevices is available
+                // Stop any existing animation frame
+                if (animationFrameId) {
+                    cancelAnimationFrame(animationFrameId);
+                }
+
                 if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
                     throw new Error('Camera API not supported in this browser');
                 }
 
+                console.log('Requesting camera access...');
+                
                 const constraints = {
                     video: {
                         facingMode: 'user',
@@ -737,10 +744,8 @@
                     audio: false
                 };
 
-                console.log('Requesting camera access...');
                 const stream = await navigator.mediaDevices.getUserMedia(constraints);
-                
-                console.log('Camera stream obtained, tracks:', stream.getTracks().length);
+                console.log('Camera stream obtained');
                 
                 webcamElement.srcObject = stream;
                 webcamElement.setAttribute('playsinline', '');
@@ -758,14 +763,20 @@
                         console.log('Video data loaded');
                         resolve();
                     };
+                    
+                    webcamElement.onerror = (e) => {
+                        clearTimeout(timeout);
+                        reject(new Error('Video element error: ' + e));
+                    };
                 });
 
                 // Play the video
-                const playPromise = webcamElement.play();
-                if (playPromise !== undefined) {
-                    await playPromise;
+                try {
+                    await webcamElement.play();
+                    console.log('Video is playing');
+                } catch (playErr) {
+                    console.error('Play error:', playErr);
                 }
-                console.log('Video is playing');
                 
                 state.videoWidth = webcamElement.videoWidth;
                 state.videoHeight = webcamElement.videoHeight;
@@ -774,20 +785,12 @@
                 
                 console.log(`Video dimensions: ${state.videoWidth}x${state.videoHeight}`);
                 
-                // Initialize MediaPipe camera
-                camera = new Camera(webcamElement, {
-                    onFrame: async () => {
-                        if (state.cameraActive) {
-                            await faceMesh.send({ image: webcamElement });
-                        }
-                    },
-                    width: state.videoWidth,
-                    height: state.videoHeight
-                });
-                
-                camera.start();
                 state.cameraActive = true;
-                console.log('Camera and face mesh started successfully');
+                
+                // Use manual frame processing instead of MediaPipe Camera utility
+                processVideoFrame();
+                
+                console.log('Camera started successfully');
                 
             } catch (error) {
                 console.error('Camera initialization error:', error);
@@ -795,27 +798,47 @@
                 let errorMsg = 'Camera Error:\n\n';
                 
                 if (error.name === 'NotAllowedError' || error.name === 'PermissionDeniedError') {
-                    errorMsg += 'Camera permission denied. Please:\n' +
-                               '1. Check your browser settings\n' +
-                               '2. Allow camera access for this site\n' +
+                    errorMsg += 'Camera permission denied.\n\n' +
+                               'Please:\n' +
+                               '1. Tap the lock/info icon in the address bar\n' +
+                               '2. Allow camera access\n' +
                                '3. Reload the page';
                 } else if (error.name === 'NotFoundError' || error.name === 'DevicesNotFoundError') {
                     errorMsg += 'No camera detected on this device.';
                 } else if (error.name === 'NotReadableError' || error.name === 'TrackStartError') {
-                    errorMsg += 'Camera is in use by another app.\n' +
-                               'Please close other apps using the camera and reload.';
+                    errorMsg += 'Camera hardware error.\n\n' +
+                               'Try:\n' +
+                               '1. Close ALL other apps/tabs using camera\n' +
+                               '2. Restart your browser\n' +
+                               '3. Restart your device if needed';
                 } else if (error.name === 'AbortError') {
                     errorMsg += 'Camera access was interrupted.\n' +
-                               'Please reload the page and try again.';
+                               'Please reload and try again.';
                 } else if (error.name === 'OverconstrainedError') {
-                    errorMsg += 'Camera does not support the required settings.\n' +
-                               'Try a different device.';
+                    errorMsg += 'Camera does not support required settings.';
                 } else {
                     errorMsg += error.message || 'Unknown error occurred.';
                 }
                 
                 alert(errorMsg);
             }
+        }
+
+        // Process video frames manually (mobile-friendly)
+        async function processVideoFrame() {
+            if (!state.cameraActive) {
+                return;
+            }
+
+            try {
+                if (webcamElement.readyState === webcamElement.HAVE_ENOUGH_DATA) {
+                    await faceMesh.send({ image: webcamElement });
+                }
+            } catch (err) {
+                console.error('Frame processing error:', err);
+            }
+
+            animationFrameId = requestAnimationFrame(processVideoFrame);
         }
 
         // Fullscreen dot animation
@@ -1117,10 +1140,9 @@
             initCharts();
             initFaceMesh();
             
-            // Small delay before camera initialization for mobile
-            setTimeout(async () => {
-                await startCamera();
-            }, 500);
+            // Delay for mobile stability
+            await new Promise(resolve => setTimeout(resolve, 500));
+            await startCamera();
         });
     </script>
 </body>
