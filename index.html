@@ -716,6 +716,13 @@
         // Start camera with better mobile support
         async function startCamera() {
             try {
+                // Stop any existing streams first
+                if (webcamElement.srcObject) {
+                    const tracks = webcamElement.srcObject.getTracks();
+                    tracks.forEach(track => track.stop());
+                    webcamElement.srcObject = null;
+                }
+
                 // First check if mediaDevices is available
                 if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
                     throw new Error('Camera API not supported in this browser');
@@ -724,8 +731,8 @@
                 const constraints = {
                     video: {
                         facingMode: 'user',
-                        width: { ideal: 1280, min: 640 },
-                        height: { ideal: 720, min: 480 }
+                        width: { ideal: 1280 },
+                        height: { ideal: 720 }
                     },
                     audio: false
                 };
@@ -733,44 +740,32 @@
                 console.log('Requesting camera access...');
                 const stream = await navigator.mediaDevices.getUserMedia(constraints);
                 
-                console.log('Camera stream obtained');
-                webcamElement.srcObject = stream;
-                webcamElement.setAttribute('playsinline', 'true');
-                webcamElement.setAttribute('autoplay', 'true');
+                console.log('Camera stream obtained, tracks:', stream.getTracks().length);
                 
-                // Wait for video metadata to load
+                webcamElement.srcObject = stream;
+                webcamElement.setAttribute('playsinline', '');
+                webcamElement.setAttribute('autoplay', '');
+                webcamElement.muted = true;
+                
+                // Wait for video to be ready
                 await new Promise((resolve, reject) => {
-                    webcamElement.onloadedmetadata = () => {
-                        console.log('Video metadata loaded');
+                    const timeout = setTimeout(() => {
+                        reject(new Error('Video loading timeout'));
+                    }, 10000);
+                    
+                    webcamElement.onloadeddata = () => {
+                        clearTimeout(timeout);
+                        console.log('Video data loaded');
                         resolve();
                     };
-                    webcamElement.onerror = (e) => {
-                        console.error('Video element error:', e);
-                        reject(new Error('Failed to load video'));
-                    };
-                    // Timeout after 5 seconds
-                    setTimeout(() => reject(new Error('Video loading timeout')), 5000);
                 });
 
-                // Ensure video is playing
-                try {
-                    await webcamElement.play();
-                    console.log('Video playing');
-                } catch (playError) {
-                    console.error('Play error:', playError);
-                    // Try again with user interaction
-                    await new Promise((resolve) => {
-                        const playButton = document.createElement('button');
-                        playButton.textContent = 'Tap to start camera';
-                        playButton.style.cssText = 'position: fixed; top: 50%; left: 50%; transform: translate(-50%, -50%); z-index: 10000; padding: 20px; font-size: 18px;';
-                        document.body.appendChild(playButton);
-                        playButton.onclick = async () => {
-                            await webcamElement.play();
-                            document.body.removeChild(playButton);
-                            resolve();
-                        };
-                    });
+                // Play the video
+                const playPromise = webcamElement.play();
+                if (playPromise !== undefined) {
+                    await playPromise;
                 }
+                console.log('Video is playing');
                 
                 state.videoWidth = webcamElement.videoWidth;
                 state.videoHeight = webcamElement.videoHeight;
@@ -779,6 +774,7 @@
                 
                 console.log(`Video dimensions: ${state.videoWidth}x${state.videoHeight}`);
                 
+                // Initialize MediaPipe camera
                 camera = new Camera(webcamElement, {
                     onFrame: async () => {
                         if (state.cameraActive) {
@@ -789,20 +785,31 @@
                     height: state.videoHeight
                 });
                 
-                await camera.start();
+                camera.start();
                 state.cameraActive = true;
-                console.log('Camera started successfully');
+                console.log('Camera and face mesh started successfully');
                 
             } catch (error) {
-                console.error('Camera error:', error);
-                let errorMsg = 'Camera access failed. ';
+                console.error('Camera initialization error:', error);
+                
+                let errorMsg = 'Camera Error:\n\n';
                 
                 if (error.name === 'NotAllowedError' || error.name === 'PermissionDeniedError') {
-                    errorMsg += 'Please allow camera permissions in your browser settings and reload the page.';
+                    errorMsg += 'Camera permission denied. Please:\n' +
+                               '1. Check your browser settings\n' +
+                               '2. Allow camera access for this site\n' +
+                               '3. Reload the page';
                 } else if (error.name === 'NotFoundError' || error.name === 'DevicesNotFoundError') {
-                    errorMsg += 'No camera found on this device.';
+                    errorMsg += 'No camera detected on this device.';
                 } else if (error.name === 'NotReadableError' || error.name === 'TrackStartError') {
-                    errorMsg += 'Camera is already in use by another application.';
+                    errorMsg += 'Camera is in use by another app.\n' +
+                               'Please close other apps using the camera and reload.';
+                } else if (error.name === 'AbortError') {
+                    errorMsg += 'Camera access was interrupted.\n' +
+                               'Please reload the page and try again.';
+                } else if (error.name === 'OverconstrainedError') {
+                    errorMsg += 'Camera does not support the required settings.\n' +
+                               'Try a different device.';
                 } else {
                     errorMsg += error.message || 'Unknown error occurred.';
                 }
@@ -1105,10 +1112,15 @@
         });
 
         // Initialize on page load
-        window.addEventListener('load', () => {
+        window.addEventListener('load', async () => {
+            console.log('Page loaded, initializing...');
             initCharts();
             initFaceMesh();
-            startCamera();
+            
+            // Small delay before camera initialization for mobile
+            setTimeout(async () => {
+                await startCamera();
+            }, 500);
         });
     </script>
 </body>
