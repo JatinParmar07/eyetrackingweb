@@ -470,7 +470,7 @@
             
             // Raw trajectory - with start/end markers
             trajectoryChart = new Chart(document.getElementById('trajectoryChart'), {
-                type: 'scatter',
+                type: 'line',
                 data: {
                     datasets: [
                         {
@@ -542,7 +542,7 @@
 
             // Smooth trajectory - with start/end markers
             smoothChart = new Chart(document.getElementById('smoothChart'), {
-                type: 'scatter',
+                type: 'line',
                 data: {
                     datasets: [
                         {
@@ -780,21 +780,27 @@
 
             const filteredH = gaussianFilter1d(state.horizontalData, 5.0);
             const filteredV = gaussianFilter1d(state.verticalData, 5.0);
+            
+            // Mirror horizontally and flip vertically for correct orientation
+            const mirroredH = state.horizontalData.map(x => state.videoWidth - x);
+            const flippedV = state.verticalData.map(y => state.videoHeight - y);
+            const filteredMirroredH = filteredH.map(x => state.videoWidth - x);
+            const filteredFlippedV = filteredV.map(y => state.videoHeight - y);
 
-            // Horizontal chart - X: horizontal position, Y: time (reversed)
-            const horizontalPoints = filteredH.map((x, i) => ({ x: x, y: state.timestamps[i] }));
+            // Horizontal chart - X: horizontal position (mirrored), Y: time (reversed)
+            const horizontalPoints = filteredMirroredH.map((x, i) => ({ x: x, y: state.timestamps[i] }));
             horizontalChart.data.datasets[0].data = horizontalPoints;
             horizontalChart.update('none');
 
-            // Vertical chart - X: time, Y: vertical position
-            const verticalPoints = state.timestamps.map((t, i) => ({ x: t, y: filteredV[i] }));
+            // Vertical chart - X: time, Y: vertical position (flipped)
+            const verticalPoints = state.timestamps.map((t, i) => ({ x: t, y: filteredFlippedV[i] }));
             verticalChart.data.datasets[0].data = verticalPoints;
             verticalChart.update('none');
 
-            // Raw trajectory - all points with start/end markers
-            const rawTrajectoryPoints = state.horizontalData.map((x, i) => ({
+            // Raw trajectory - all points with start/end markers (mirrored H, flipped V)
+            const rawTrajectoryPoints = mirroredH.map((x, i) => ({
                 x: x,
-                y: state.verticalData[i]
+                y: flippedV[i]
             }));
             trajectoryChart.data.datasets[0].data = rawTrajectoryPoints;
             
@@ -805,10 +811,10 @@
             }
             trajectoryChart.update('none');
 
-            // Smooth trajectory - filtered data with start/end markers
-            const smoothTrajectoryPoints = filteredH.map((x, i) => ({ 
+            // Smooth trajectory - filtered data with start/end markers (mirrored H, flipped V)
+            const smoothTrajectoryPoints = filteredMirroredH.map((x, i) => ({ 
                 x: x, 
-                y: filteredV[i] 
+                y: filteredFlippedV[i] 
             }));
             smoothChart.data.datasets[0].data = smoothTrajectoryPoints;
             
