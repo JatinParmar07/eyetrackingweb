@@ -2,7 +2,8 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <meta name="mobile-web-app-capable" content="yes">
     <title>Nystagmus Eye Tracking System</title>
     <script src="https://cdn.jsdelivr.net/npm/@mediapipe/face_mesh"></script>
     <script src="https://cdn.jsdelivr.net/npm/@mediapipe/camera_utils"></script>
@@ -175,10 +176,12 @@
             background: #4b5563;
         }
 
+        /* Updated charts container for 1:1 aspect ratio */
         .charts-container {
             display: grid;
-            grid-template-columns: 1fr 1fr;
+            grid-template-columns: repeat(2, 1fr);
             gap: 15px;
+            width: 100%;
         }
 
         .chart-wrapper {
@@ -186,10 +189,20 @@
             padding: 15px;
             border-radius: 8px;
             box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+            aspect-ratio: 1 / 1;
+            position: relative;
+            width: 100%;
+            min-height: 300px;
         }
 
         canvas.chart {
-            max-height: 350px;
+            position: absolute !important;
+            top: 15px;
+            left: 15px;
+            right: 15px;
+            bottom: 15px;
+            width: calc(100% - 30px) !important;
+            height: calc(100% - 30px) !important;
         }
 
         #fullscreenDot {
@@ -217,6 +230,7 @@
             color: black;
         }
 
+        /* GPU-accelerated dot movement */
         .moving-dot {
             position: absolute;
             width: 22px;
@@ -225,6 +239,9 @@
             border-radius: 50%;
             border: 3px solid #c80000;
             box-shadow: 0 0 15px rgba(255, 30, 30, 0.6);
+            transform: translate3d(0, 0, 0);
+            will-change: transform;
+            backface-visibility: hidden;
         }
 
         .stop-tracking-btn {
@@ -263,6 +280,15 @@
         @media (max-width: 768px) {
             .charts-container {
                 grid-template-columns: 1fr;
+            }
+            
+            .chart-wrapper {
+                min-height: 250px;
+                max-height: 400px;
+            }
+            
+            .countdown {
+                font-size: 80px;
             }
         }
     </style>
@@ -331,6 +357,9 @@
     </div>
 
     <script>
+        // Detect mobile device
+        const isMobile = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
+        
         // Global state
         const state = {
             selectedEye: '',
@@ -348,7 +377,9 @@
             videoHeight: 480,
             recordedFrames: [],
             mediaRecorder: null,
-            recordedChunks: []
+            recordedChunks: [],
+            lastProcessTime: 0,
+            processInterval: isMobile ? 50 : 33 // Throttle on mobile
         };
 
         // MediaPipe Face Mesh
@@ -376,10 +407,24 @@
         // Charts
         let horizontalChart, trajectoryChart, verticalChart, smoothChart;
 
-        // Initialize Charts with enhanced styling
+        // Initialize Charts with 1:1 aspect ratio
         function initCharts() {
             Chart.defaults.font.family = "'Segoe UI', 'Arial', sans-serif";
             Chart.defaults.color = '#374151';
+            
+            const commonOptions = {
+                responsive: true,
+                maintainAspectRatio: true,
+                aspectRatio: 1,
+                animation: {
+                    duration: 0
+                },
+                plugins: {
+                    legend: { 
+                        display: false 
+                    }
+                }
+            };
             
             // Horizontal chart - time on Y axis (top to bottom)
             horizontalChart = new Chart(document.getElementById('horizontalChart'), {
@@ -397,26 +442,25 @@
                     }]
                 },
                 options: {
-                    responsive: true,
-                    maintainAspectRatio: true,
+                    ...commonOptions,
                     plugins: {
-                        legend: { display: false },
+                        ...commonOptions.plugins,
                         title: { 
                             display: true, 
                             text: 'Horizontal Movement Over Time', 
-                            font: { size: 15, weight: 'bold' },
+                            font: { size: 14, weight: 'bold' },
                             color: '#1f2937',
-                            padding: 20
+                            padding: 10
                         }
                     },
                     scales: {
                         x: { 
-                            title: { display: true, text: 'Horizontal Position (px)', font: { size: 12, weight: '600' } },
+                            title: { display: true, text: 'Horizontal Position (px)', font: { size: 11, weight: '600' } },
                             type: 'linear',
                             grid: { color: 'rgba(0, 0, 0, 0.05)' }
                         },
                         y: { 
-                            title: { display: true, text: 'Time (seconds)', font: { size: 12, weight: '600' } },
+                            title: { display: true, text: 'Time (seconds)', font: { size: 11, weight: '600' } },
                             reverse: true,
                             type: 'linear',
                             grid: { color: 'rgba(0, 0, 0, 0.05)' }
@@ -441,26 +485,25 @@
                     }]
                 },
                 options: {
-                    responsive: true,
-                    maintainAspectRatio: true,
+                    ...commonOptions,
                     plugins: {
-                        legend: { display: false },
+                        ...commonOptions.plugins,
                         title: { 
                             display: true, 
                             text: 'Vertical Movement Over Time', 
-                            font: { size: 15, weight: 'bold' },
+                            font: { size: 14, weight: 'bold' },
                             color: '#1f2937',
-                            padding: 20
+                            padding: 10
                         }
                     },
                     scales: {
                         x: { 
-                            title: { display: true, text: 'Time (seconds)', font: { size: 12, weight: '600' } },
+                            title: { display: true, text: 'Time (seconds)', font: { size: 11, weight: '600' } },
                             type: 'linear',
                             grid: { color: 'rgba(0, 0, 0, 0.05)' }
                         },
                         y: { 
-                            title: { display: true, text: 'Vertical Position (px)', font: { size: 12, weight: '600' } },
+                            title: { display: true, text: 'Vertical Position (px)', font: { size: 11, weight: '600' } },
                             type: 'linear',
                             grid: { color: 'rgba(0, 0, 0, 0.05)' }
                         }
@@ -468,7 +511,7 @@
                 }
             });
             
-            // Raw trajectory - with start/end markers
+            // Raw trajectory
             trajectoryChart = new Chart(document.getElementById('trajectoryChart'), {
                 type: 'line',
                 data: {
@@ -504,35 +547,34 @@
                     ]
                 },
                 options: {
-                    responsive: true,
-                    maintainAspectRatio: true,
+                    ...commonOptions,
                     plugins: {
                         legend: { 
                             display: true,
                             position: 'top',
                             labels: { 
-                                boxWidth: 12,
-                                font: { size: 11, weight: '600' },
-                                padding: 15,
+                                boxWidth: 10,
+                                font: { size: 10, weight: '600' },
+                                padding: 8,
                                 usePointStyle: true
                             }
                         },
                         title: { 
                             display: true, 
                             text: '2D Eye Movement Pattern (Raw)', 
-                            font: { size: 15, weight: 'bold' },
+                            font: { size: 14, weight: 'bold' },
                             color: '#1f2937',
-                            padding: 20
+                            padding: 10
                         }
                     },
                     scales: {
                         x: { 
-                            title: { display: true, text: 'Horizontal Position (px)', font: { size: 12, weight: '600' } },
+                            title: { display: true, text: 'Horizontal Position (px)', font: { size: 11, weight: '600' } },
                             type: 'linear',
                             grid: { color: 'rgba(0, 0, 0, 0.05)' }
                         },
                         y: { 
-                            title: { display: true, text: 'Vertical Position (px)', font: { size: 12, weight: '600' } },
+                            title: { display: true, text: 'Vertical Position (px)', font: { size: 11, weight: '600' } },
                             type: 'linear',
                             grid: { color: 'rgba(0, 0, 0, 0.05)' }
                         }
@@ -540,7 +582,7 @@
                 }
             });
 
-            // Smooth trajectory - with start/end markers
+            // Smooth trajectory
             smoothChart = new Chart(document.getElementById('smoothChart'), {
                 type: 'line',
                 data: {
@@ -577,35 +619,34 @@
                     ]
                 },
                 options: {
-                    responsive: true,
-                    maintainAspectRatio: true,
+                    ...commonOptions,
                     plugins: {
                         legend: { 
                             display: true,
                             position: 'top',
                             labels: { 
-                                boxWidth: 12,
-                                font: { size: 11, weight: '600' },
-                                padding: 15,
+                                boxWidth: 10,
+                                font: { size: 10, weight: '600' },
+                                padding: 8,
                                 usePointStyle: true
                             }
                         },
                         title: { 
                             display: true, 
                             text: 'Smooth Trajectory (Filtered - No Noise)', 
-                            font: { size: 15, weight: 'bold' },
+                            font: { size: 14, weight: 'bold' },
                             color: '#1f2937',
-                            padding: 20
+                            padding: 10
                         }
                     },
                     scales: {
                         x: { 
-                            title: { display: true, text: 'Horizontal Position (px)', font: { size: 12, weight: '600' } },
+                            title: { display: true, text: 'Horizontal Position (px)', font: { size: 11, weight: '600' } },
                             type: 'linear',
                             grid: { color: 'rgba(0, 0, 0, 0.05)' }
                         },
                         y: { 
-                            title: { display: true, text: 'Vertical Position (px)', font: { size: 12, weight: '600' } },
+                            title: { display: true, text: 'Vertical Position (px)', font: { size: 11, weight: '600' } },
                             type: 'linear',
                             grid: { color: 'rgba(0, 0, 0, 0.05)' }
                         }
@@ -648,8 +689,15 @@
             return { x: centerX, y: centerY };
         }
 
-        // Process face mesh results
+        // Process face mesh results with throttling for mobile
         function onResults(results) {
+            // Throttle processing on mobile
+            const now = Date.now();
+            if (now - state.lastProcessTime < state.processInterval) {
+                return;
+            }
+            state.lastProcessTime = now;
+            
             const width = canvasElement.width;
             const height = canvasElement.height;
 
@@ -675,11 +723,6 @@
 
                 if (state.trackingActive && trackedCenter) {
                     addDataPoint(trackedCenter);
-                    
-                    // Capture frame for video recording
-                    if (state.mediaRecorder && state.mediaRecorder.state === 'recording') {
-                        // Frame is already being recorded by MediaRecorder
-                    }
                 }
             }
 
@@ -787,38 +830,36 @@
             const filteredMirroredH = filteredH.map(x => state.videoWidth - x);
             const filteredFlippedV = filteredV.map(y => state.videoHeight - y);
 
-            // Horizontal chart - X: horizontal position (mirrored), Y: time (reversed)
+            // Horizontal chart
             const horizontalPoints = filteredMirroredH.map((x, i) => ({ x: x, y: state.timestamps[i] }));
             horizontalChart.data.datasets[0].data = horizontalPoints;
             horizontalChart.update('none');
 
-            // Vertical chart - X: time, Y: vertical position (flipped)
+            // Vertical chart
             const verticalPoints = state.timestamps.map((t, i) => ({ x: t, y: filteredFlippedV[i] }));
             verticalChart.data.datasets[0].data = verticalPoints;
             verticalChart.update('none');
 
-            // Raw trajectory - all points with start/end markers (mirrored H, flipped V)
+            // Raw trajectory
             const rawTrajectoryPoints = mirroredH.map((x, i) => ({
                 x: x,
                 y: flippedV[i]
             }));
             trajectoryChart.data.datasets[0].data = rawTrajectoryPoints;
             
-            // Add start and end markers
             if (rawTrajectoryPoints.length > 0) {
                 trajectoryChart.data.datasets[1].data = [rawTrajectoryPoints[0]];
                 trajectoryChart.data.datasets[2].data = [rawTrajectoryPoints[rawTrajectoryPoints.length - 1]];
             }
             trajectoryChart.update('none');
 
-            // Smooth trajectory - filtered data with start/end markers (mirrored H, flipped V)
+            // Smooth trajectory
             const smoothTrajectoryPoints = filteredMirroredH.map((x, i) => ({ 
                 x: x, 
                 y: filteredFlippedV[i] 
             }));
             smoothChart.data.datasets[0].data = smoothTrajectoryPoints;
             
-            // Add start and end markers
             if (smoothTrajectoryPoints.length > 0) {
                 smoothChart.data.datasets[1].data = [smoothTrajectoryPoints[0]];
                 smoothChart.data.datasets[2].data = [smoothTrajectoryPoints[smoothTrajectoryPoints.length - 1]];
@@ -826,17 +867,15 @@
             smoothChart.update('none');
         }
 
-        // Start camera - Mobile-friendly version without MediaPipe Camera utility
+        // Start camera with highest quality
         async function startCamera() {
             try {
-                // Stop any existing streams first
                 if (webcamElement.srcObject) {
                     const tracks = webcamElement.srcObject.getTracks();
                     tracks.forEach(track => track.stop());
                     webcamElement.srcObject = null;
                 }
 
-                // Stop any existing animation frame
                 if (animationFrameId) {
                     cancelAnimationFrame(animationFrameId);
                 }
@@ -847,6 +886,7 @@
 
                 console.log('Requesting camera access...');
                 
+                // High quality settings for detailed eye tracking
                 const constraints = {
                     video: {
                         facingMode: 'user',
@@ -864,7 +904,6 @@
                 webcamElement.setAttribute('autoplay', '');
                 webcamElement.muted = true;
                 
-                // Wait for video to be ready
                 await new Promise((resolve, reject) => {
                     const timeout = setTimeout(() => {
                         reject(new Error('Video loading timeout'));
@@ -882,7 +921,6 @@
                     };
                 });
 
-                // Play the video
                 try {
                     await webcamElement.play();
                     console.log('Video is playing');
@@ -898,8 +936,6 @@
                 console.log(`Video dimensions: ${state.videoWidth}x${state.videoHeight}`);
                 
                 state.cameraActive = true;
-                
-                // Use manual frame processing instead of MediaPipe Camera utility
                 processVideoFrame();
                 
                 console.log('Camera started successfully');
@@ -936,7 +972,7 @@
             }
         }
 
-        // Process video frames manually (mobile-friendly)
+        // Process video frames
         async function processVideoFrame() {
             if (!state.cameraActive) {
                 return;
@@ -950,11 +986,12 @@
                 console.error('Frame processing error:', err);
             }
 
-            // Use setTimeout instead of requestAnimationFrame for better mobile performance
-            setTimeout(() => processVideoFrame(), 33); // ~30fps
+            // Adaptive frame rate for mobile
+            const delay = isMobile ? 50 : 33;
+            setTimeout(() => processVideoFrame(), delay);
         }
 
-        // Fullscreen dot animation
+        // Fullscreen dot animation with GPU acceleration
         let dotAnimation;
         let dotCountdownInterval;
 
@@ -963,10 +1000,9 @@
             countdown.style.display = 'block';
             movingDot.style.display = 'block';
             
-            // Set initial dot position (top-left corner with margin)
+            // Initial position
             const margin = 40;
-            movingDot.style.left = (margin - 11) + 'px';
-            movingDot.style.top = (margin - 11) + 'px';
+            movingDot.style.transform = `translate(${margin - 11}px, ${margin - 11}px)`;
             
             let count = 3;
             countdown.textContent = count;
@@ -989,11 +1025,11 @@
 
         function animateDot() {
             const margin = 40;
-            const buttonHeight = 70; // Height reserved for stop button at bottom
+            const buttonHeight = 70;
             const width = window.innerWidth - 2 * margin;
             const height = window.innerHeight - 2 * margin - buttonHeight;
             const perimeter = 2 * (width + height);
-            const speed = 140; // 1.75x faster
+            const speed = 140;
             
             let t = 0;
             const startTime = Date.now();
@@ -1017,9 +1053,9 @@
                     y = margin + height - (t - 2 * width - height);
                 }
                 
-                movingDot.style.left = (x - 11) + 'px';
-                movingDot.style.top = (y - 11) + 'px';
-            }, 10);
+                // Use GPU-accelerated transform
+                movingDot.style.transform = `translate(${x - 11}px, ${y - 11}px)`;
+            }, isMobile ? 16 : 10); // Adjust frame rate for mobile
         }
 
         function stopFullscreenDot() {
@@ -1093,7 +1129,6 @@
             state.trackingActive = false;
             stopFullscreenDot();
             
-            // Stop video recording
             if (state.mediaRecorder && state.mediaRecorder.state !== 'inactive') {
                 state.mediaRecorder.stop();
                 console.log('Video recording stopped');
@@ -1145,7 +1180,7 @@
             const timestamp = new Date().toISOString().slice(0, 19).replace(/:/g, '-');
             const baseFilename = `${state.patientName}_${state.selectedEye}_${timestamp}`;
 
-            // 1. Save CSV with velocities
+            // Save CSV with velocities
             const velocities = [0];
             for (let i = 1; i < state.horizontalData.length; i++) {
                 const dx = state.horizontalData[i] - state.horizontalData[i - 1];
@@ -1162,7 +1197,7 @@
 
             downloadFile(csv, `${baseFilename}_coordinates.csv`, 'text/csv');
 
-            // 2. Save video recording
+            // Save video recording
             if (state.recordedChunks.length > 0) {
                 const blob = new Blob(state.recordedChunks, { type: 'video/webm' });
                 const url = URL.createObjectURL(blob);
@@ -1173,7 +1208,7 @@
                 URL.revokeObjectURL(url);
             }
 
-            // 3. Save only combined analysis image
+            // Save combined analysis image
             await saveCombinedCharts(baseFilename);
 
             alert('✅ All data saved successfully!\n\n' +
@@ -1205,22 +1240,19 @@
             ctx.fillStyle = gradient;
             ctx.fillRect(0, 0, canvas.width, canvas.height);
             
-            // Title section with background
+            // Title section
             ctx.fillStyle = 'rgba(255, 255, 255, 0.9)';
             ctx.fillRect(0, 0, canvas.width, 100);
             
-            // Main title
             ctx.fillStyle = '#1e293b';
             ctx.font = 'bold 32px "Segoe UI", Arial, sans-serif';
             ctx.textAlign = 'center';
             ctx.fillText(`Eye Tracking Analysis Report`, canvas.width / 2, 45);
             
-            // Subtitle
             ctx.fillStyle = '#475569';
             ctx.font = '20px "Segoe UI", Arial, sans-serif';
             ctx.fillText(`Patient: ${state.patientName} | Eye: ${state.selectedEye.toUpperCase()} | Date: ${new Date().toLocaleDateString()}`, canvas.width / 2, 80);
             
-            // Draw decorative line
             ctx.strokeStyle = '#3b82f6';
             ctx.lineWidth = 3;
             ctx.beginPath();
@@ -1228,7 +1260,7 @@
             ctx.lineTo(canvas.width - 100, 95);
             ctx.stroke();
             
-            // Draw 4 charts in 2x2 grid with borders
+            // Draw charts in 2x2 grid
             const chartWidth = 900;
             const chartHeight = 650;
             const spacingX = 60;
@@ -1236,14 +1268,12 @@
             const startX = 60;
             const startY = 120;
             
-            // Add white backgrounds for charts
             ctx.fillStyle = 'white';
             ctx.shadowColor = 'rgba(0, 0, 0, 0.1)';
             ctx.shadowBlur = 10;
             ctx.shadowOffsetX = 2;
             ctx.shadowOffsetY = 2;
             
-            // Chart backgrounds
             ctx.fillRect(startX - 10, startY - 10, chartWidth + 20, chartHeight + 20);
             ctx.fillRect(startX + chartWidth + spacingX - 10, startY - 10, chartWidth + 20, chartHeight + 20);
             ctx.fillRect(startX - 10, startY + chartHeight + spacingY - 10, chartWidth + 20, chartHeight + 20);
@@ -1251,13 +1281,12 @@
             
             ctx.shadowColor = 'transparent';
             
-            // Draw charts
             ctx.drawImage(horizontalChart.canvas, startX, startY, chartWidth, chartHeight);
             ctx.drawImage(trajectoryChart.canvas, startX + chartWidth + spacingX, startY, chartWidth, chartHeight);
             ctx.drawImage(verticalChart.canvas, startX, startY + chartHeight + spacingY, chartWidth, chartHeight);
             ctx.drawImage(smoothChart.canvas, startX + chartWidth + spacingX, startY + chartHeight + spacingY, chartWidth, chartHeight);
             
-            // Add statistics footer
+            // Footer statistics
             const duration = state.timestamps[state.timestamps.length - 1] || 0;
             const dataPoints = state.timestamps.length;
             
@@ -1289,7 +1318,6 @@
             }
         });
 
-        // Stop tracking button in fullscreen
         stopTrackingBtn.addEventListener('click', () => {
             stopBtn.click();
         });
@@ -1301,13 +1329,24 @@
             }
         });
 
+        // Handle window resize for charts
+        let resizeTimeout;
+        window.addEventListener('resize', () => {
+            clearTimeout(resizeTimeout);
+            resizeTimeout = setTimeout(() => {
+                if (horizontalChart) horizontalChart.resize();
+                if (verticalChart) verticalChart.resize();
+                if (trajectoryChart) trajectoryChart.resize();
+                if (smoothChart) smoothChart.resize();
+            }, 250);
+        });
+
         // Initialize on page load
         window.addEventListener('load', async () => {
             console.log('Page loaded, initializing...');
             initCharts();
             initFaceMesh();
             
-            // Delay for mobile stability
             await new Promise(resolve => setTimeout(resolve, 500));
             await startCamera();
         });
